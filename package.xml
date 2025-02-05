@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>gcs_trajectory_planner</name>
+  <version>0.0.0</version>
+  <description>TODO: Package description</description>
+  <maintainer email="jcp0605@tamu.edu">james</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <!-- <build_depend>mapviz_msgs</build_depend> -->
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+
+
+  <!-- <depend>mapviz_msgs</depend> -->
+  <depend>drake_ros</depend>
+  <depend>rclcpp</depend>
+  <depend>builtin_interfaces</depend>
+  <depend>std_msgs</depend>
+  <depend>sa_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>swri_transform_util</depend>
+  <depend>visualization_msgs</depend>
+  <exec_depend>ros2launch</exec_depend>
+  <exec_depend>cgal</exec_depend>
+  <!-- <exec_depend>cgal</exec_depend> -->
+  
+  <!-- Used to develop msg files -->
+  <!-- <build_depend>rosidl_default_generators</build_depend> -->
+  <!-- <exec_depend>rosidl_default_runtime</exec_depend> -->
+  
+  <!-- <member_of_group>rosidl_interface_packages</member_of_group> -->
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
