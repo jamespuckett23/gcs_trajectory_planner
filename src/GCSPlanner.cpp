@@ -21,7 +21,9 @@ GCSPlanner::GCSPlanner(SemMap& SWM,
     source_location = source_location_incoming;
     target_location = target_location_incoming;
 
+    std::cout << "about to generate gcs" << std::endl;
     GenerateGCS();
+    std::cout << "just generated gcs" << std::endl;
 
     gcs.AddPathLengthCost(2);
     gcs.AddTimeCost();
@@ -63,7 +65,8 @@ GCSPlanner::GCSPlanner(SemMap& SWM,
 void GCSPlanner::GenerateGCS() {
     // coordinate the vertex and elements while creating the graph of convex sets
     std::vector<VPolytope> vertex_list;
-    std::vector<std::pair<std::string, NodeInfo>> element_list;
+    // std::vector<std::pair<std::string, NodeInfo>> element_list;
+    std::unordered_map<std::string, Element> element_list;
 
     std::vector<std::pair<int, polygon>> polygons;
     std::vector<std::pair<point_type, point_type>> lines;
@@ -98,19 +101,17 @@ void GCSPlanner::GenerateGCS() {
 
     // load each feature into a polygon vertex in the graph of convex sets
     // create a list of required edges to be created next
-    int obstacle_int = 0;
     double min_distance_to_source_point = std::numeric_limits<double>::infinity();
     double min_distance_to_target_point = std::numeric_limits<double>::infinity();
     std::pair<std::string, NodeInfo> closest_element_to_source;
     std::pair<std::string, NodeInfo> closest_element_to_target;
 
-    auto swm_elements = this->SM.fm;
+    auto swm_nodes = SM.fm;
 
-    // std::cout << "start: " << source_location[0] << ", "<< source_location[1] << std::endl;
-    // std::cout << "goal: " << target_location[0] << ", "<< target_location[1] << std::endl;
-
-    for (auto element = swm_elements.begin(); element != swm_elements.end(); ++element) {
-        auto& poly = element->second.Polygon;
+    std::cout << "about to begin the for loop" << std::endl;
+    int node_index = 0;
+    for (auto node = swm_nodes.begin(); node != swm_nodes.end(); ++node) {
+        auto& poly = node->second.Polygon;
 
         // Determine the number of vertices in the polygon
         std::size_t num_vertices = poly.outer().size();
@@ -120,15 +121,15 @@ void GCSPlanner::GenerateGCS() {
             vertices.col(i) << poly.outer()[i].get<0>(), poly.outer()[i].get<1>();
         }
 
-        if (element->first == "Ballpark" || element->first == "Feature_1" || element->first == "Feature_2" || element->first == "Feature_6") {
+        if (node->first == "Ballpark" || node->first == "Feature_1" || node->first == "Feature_2" || node->first == "Feature_6") {
             continue;
         }
 
-        polygons.push_back(std::make_pair(int(round(element->second.nodeType->currentFeature.traversability.gv)), poly));
+        polygons.push_back(std::make_pair(int(round(node->second.nodeType->currentFeature.traversability.gv)), poly));
 
-        // checks if the element's terrain is traversable at all for the vehicle type
+        // checks if the node's terrain is traversable at all for the vehicle type
         // also defines the vehicle's radius which is used to shrink the size of the vertex for obstacle avoidance
-        if (this->check_terrain(*element, vertices, this->vehicle_type)) {
+        if (this->check_terrain(*node, vertices, this->vehicle_type)) {
             const static double epsilon = 1.0;
 
             Eigen::MatrixXd simplified_vertices = vertices;
@@ -136,94 +137,162 @@ void GCSPlanner::GenerateGCS() {
             number_of_faces += simplified_vertices.cols();
             auto vertex = VPolytope(simplified_vertices);
             vertex_list.push_back(vertex.GetMinimalRepresentation());
-            element_list.push_back(*element);
+
+            Element element;
+            element.node = node->second;
+            element.name = node->first;
+            element.index = node_index;
+            element.polygon = poly;
+            element.vertex = vertex.GetMinimalRepresentation();
+            element_list[element.name] = element;
+
+            node_index += 1;
 
             if (boost::geometry::covered_by(source_point, poly)) {
-                source_vertex_name = element->first;
-                source_vertex_region = simplified_vertices;
+
+                // add source_point as a neighbor of poly
+                // add source_point as a convex set (only a pt)
+                // reference the pt using the string name when necessary around line 290
+
+                source_vertex_name = node->first + "_source";
+                SM.neighbors[node->first].push_back(source_vertex_name);
 
                 Eigen::Matrix<double, 2, 1> mat_source;
                 mat_source(0,0) = source_point.get<0>();
                 mat_source(1,0) = source_point.get<1>();
 
+                Element source_element;
+                source_element.node = node->second;
+                source_element.name = source_vertex_name;
+                source_element.index = node_index;
+                source_element.polygon = poly;
+                source_element.vertex = VPolytope(Eigen::Ref<const Eigen::MatrixXd>(mat_source));
+                element_list[source_element.name] = source_element;
+                // source_vertex_name = node->first + "_source";
+                // source_vertex_region = simplified_vertices;
+
+                // Eigen::Matrix<double, 2, 1> mat_source;
+                // mat_source(0,0) = source_point.get<0>();
+                // mat_source(1,0) = source_point.get<1>();
+
                 source_to_main_control_point = VPolytope(Eigen::Ref<const Eigen::MatrixXd>(mat_source));
                 vertex_list.push_back(source_to_main_control_point);
-                element_list.push_back(*element);
+                // element_list.push_back(*element);
+                node_index += 1;
             }
             if (boost::geometry::covered_by(target_point, poly)) {
-                target_vertex_name = element->first;
-                target_vertex_region = simplified_vertices;
-                main_to_target_control_point = vertex.GetMinimalRepresentation();
+                target_vertex_name = node->first + "_target";
+                SM.neighbors[node->first].push_back(target_vertex_name);
 
                 Eigen::Matrix<double, 2, 1> mat_target;
                 mat_target(0,0) = target_point.get<0>();
                 mat_target(1,0) = target_point.get<1>();
+
+                Element target_element;
+                target_element.node = node->second;
+                target_element.name = target_vertex_name;
+                target_element.index = node_index;
+                target_element.polygon = poly;
+                target_element.vertex = VPolytope(Eigen::Ref<const Eigen::MatrixXd>(mat_target));
+                element_list[target_element.name] = target_element;
+
+
+                // target_vertex_name = node->first;
+                // target_vertex_region = simplified_vertices;
+                // main_to_target_control_point = vertex.GetMinimalRepresentation();
+
+                // Eigen::Matrix<double, 2, 1> mat_target;
+                // mat_target(0,0) = target_point.get<0>();
+                // mat_target(1,0) = target_point.get<1>();
                 main_to_target_control_point = VPolytope(Eigen::Ref<const Eigen::MatrixXd>(mat_target));
                 vertex_list.push_back(main_to_target_control_point);
-                element_list.push_back(*element);
+                // element_list.push_back(*element);
+                node_index += 1;
             }
         }
         else {
             // This terrian is an obstacle and will be avoided
-            obstacle_int += 1;
             continue;
         }
     }
 
     std::vector<std::pair<int, int>> edges;
-    ConvexSets regions_cs;
-    int num_polytopes = element_list.size();
+    ConvexSets regions_cs(element_list.size());
+
+    // int num_polytopes = element_list.size();
 
     // auto start = std::chrono::high_resolution_clock::now();
 
-    int index = 0;
-    boost::geometry::index::rtree<std::pair<boost::geometry::model::box<point_type>, std::tuple<std::string, int, polygon>>, boost::geometry::index::quadratic<16>> rtree;
-    for (const auto& element : element_list) {
-        // if (element.first == closest_element_to_source.first || element.first == closest_element_to_target.first) {
-        //     std::cout << "source or target node" << std::endl;
-        //     std::cout << element.second.Polygon.outer().size() << std::endl;
-        // }
-        if (element.first == "Ballpark") {
-            std::cout << "found ballpark" << std::endl;
-            index += 1;
-            continue;
+    // List convex sets in the main region
+    std::cout << "about to add the vertex list" << std::endl;
+    int size_of_element_vertex = 0;
+    // for (auto vertex : vertex_list) {
+    //     auto cs_list = MakeConvexSets(vertex); // returns a vector of all convex sets found -> typically only a vector of one
+    //     for (auto cs : cs_list) {
+    //         regions_cs.push_back(cs);
+    //         size_of_element_vertex += 1;
+    //     }
+    // }
+    // std::cout << "size of vertex_list: " << size_of_element_vertex << std::endl;
+
+    size_of_element_vertex = 0;
+    std::cout << "about to add the edges" << std::endl;
+    for (const auto& element_pair : element_list) {
+        auto element = element_pair.second;
+        // Add neighbors to the list of edges
+        for (auto neighbor : SM.neighbors[element.name]) {
+            edges.push_back(std::make_pair(element.index, element_list[neighbor].index));
         }
-        rtree.insert(std::make_pair(boost::geometry::return_envelope<boost::geometry::model::box<point_type>>(element.second.Polygon), std::make_tuple(element.first, index, element.second.Polygon)));
-        index += 1;
-    }
 
-    std::cout << "finished rtree construction" << std::endl;
-
-    for (auto vertex : vertex_list) {
-        auto cs_list = MakeConvexSets(vertex);
-        for (auto cs : cs_list) {
-            regions_cs.push_back(cs);
-            // continue;
-        }
-    }
-
-    for (int i = 0; i < num_polytopes; ++i) {
-        polygon query_poly = element_list[i].second.Polygon;
-        std::vector<std::pair<boost::geometry::model::box<point_type>, std::tuple<std::string, int, polygon>>> result;
-        rtree.query(boost::geometry::index::intersects(boost::geometry::return_envelope<boost::geometry::model::box<point_type>>(query_poly)), std::back_inserter(result));
-
-        int comparing_index = 0;
-        if (result.size() > 100) {
-            std::cout << "size of result: " << result.size() << std::endl;
-            std::cout << element_list[i].first << std::endl;
-        }
-        for (const auto& value : result) {
-            if (boost::geometry::intersects(std::get<2>(value.second), query_poly)) {
-                edges.emplace_back(i, std::get<1>(value.second));
-                point_type p1;
-                point_type p2;
-                boost::geometry::centroid(query_poly, p1);
-                boost::geometry::centroid(std::get<2>(value.second), p2);
-                lines.push_back(std::make_pair(p1, p2));
-                // continue;
-            }
+        // Add convex sets to the main region
+        auto convex_set_list = MakeConvexSets(element.vertex); // returns a vector of all convex sets found -> typically only a vector of one
+        for (auto convex_set : convex_set_list) {
+            regions_cs[element.index] = convex_set;
+            // regions_cs.push_back(convex_set);
+            size_of_element_vertex += 1;
         }
     }
+
+    std::cout << "size of element_list: " << size_of_element_vertex << std::endl;
+    std::cout << "size of regions_cs: " << regions_cs.size() << std::endl;
+
+    // // Find neighbors
+    // int index = 0;
+    // boost::geometry::index::rtree<std::pair<boost::geometry::model::box<point_type>, std::tuple<std::string, int, polygon>>, boost::geometry::index::quadratic<16>> rtree;
+    // for (const auto& element : element_list) {
+    //     if (element.first == "Ballpark") {
+    //         std::cout << "found ballpark" << std::endl;
+    //         index += 1;
+    //         continue;
+    //     }
+    //     rtree.insert(std::make_pair(boost::geometry::return_envelope<boost::geometry::model::box<point_type>>(element.second.Polygon), std::make_tuple(element.first, index, element.second.Polygon)));
+    //     index += 1;
+    // }
+
+    // for (int i = 0; i < num_polytopes; ++i) {
+    //     polygon query_poly = element_list[i].second.Polygon;
+    //     std::vector<std::pair<boost::geometry::model::box<point_type>, std::tuple<std::string, int, polygon>>> result;
+    //     rtree.query(boost::geometry::index::intersects(boost::geometry::return_envelope<boost::geometry::model::box<point_type>>(query_poly)), std::back_inserter(result));
+
+    //     int comparing_index = 0;
+    //     if (result.size() > 100) {
+    //         std::cout << "size of result: " << result.size() << std::endl;
+    //         std::cout << element_list[i].first << std::endl;
+    //     }
+    //     for (const auto& value : result) {
+    //         if (boost::geometry::intersects(std::get<2>(value.second), query_poly)) {
+    //             edges.emplace_back(i, std::get<1>(value.second));
+    //             point_type p1;
+    //             point_type p2;
+    //             boost::geometry::centroid(query_poly, p1);
+    //             boost::geometry::centroid(std::get<2>(value.second), p2);
+    //             lines.push_back(std::make_pair(p1, p2));
+    //             // continue;
+    //         }
+    //     }
+    // }
+
+    std::cout << "about to add the regions" << std::endl;
 
     // Load main convex sets/edges
     // from the results, create the main region to plan through that includes vertices and edges
@@ -231,7 +300,7 @@ void GCSPlanner::GenerateGCS() {
     // (# of control points = bezier_curve_order + 1)
     // h_min is the minimum amount of time for the path to travel through a vertex
     // h_max is the maximum amount of time for the path to travel through a vertex
-    main_region = &this->gcs.AddRegions(regions_cs, edges, this->bezier_curve_order, this->h_min, this->h_max, std::string("main"));
+    main_region = &gcs.AddRegions(regions_cs, edges, bezier_curve_order, h_min, h_max, std::string("main"));
 
     std::cout << "number of vertices: " << regions_cs.size() << std::endl;
     std::cout << "number of edges: " << edges.size() << std::endl;
@@ -246,14 +315,14 @@ void GCSPlanner::GenerateGCS() {
 
         // Create edges between regions and consider connecting locations
         std::cout << "Source and target are in the same region" << std::endl;
-        auto& source_to_main = this->gcs.AddEdges(*source_region, *main_region);
-        auto& main_to_target = this->gcs.AddEdges(*main_region, *target_region);
+        auto& source_to_main = gcs.AddEdges(*source_region, *main_region);
+        auto& main_to_target = gcs.AddEdges(*main_region, *target_region);
     }
     else {
         // Ensure that the source and target regions connect to the main region at the correct location
         // Convert VPolytope data type to ConvexSet_ptr of HPolyhedron data type
-        std::shared_ptr<HPolyhedron> start_HPolyhedron_ptr = std::make_shared<HPolyhedron>(source_to_main_control_point);
-        std::shared_ptr<HPolyhedron> target_HPolyhedron_ptr = std::make_shared<HPolyhedron>(main_to_target_control_point);
+        std::shared_ptr<HPolyhedron> start_HPolyhedron_ptr = std::make_shared<HPolyhedron>(element_list[source_vertex_name].vertex);
+        std::shared_ptr<HPolyhedron> target_HPolyhedron_ptr = std::make_shared<HPolyhedron>(element_list[target_vertex_name].vertex);
         const ConvexSet* source_connecting_location_convex_set_ptr = dynamic_cast<const ConvexSet*>(start_HPolyhedron_ptr.get());
         const ConvexSet* target_connecting_location_convex_set_ptr = dynamic_cast<const ConvexSet*>(target_HPolyhedron_ptr.get());
         
@@ -265,11 +334,11 @@ void GCSPlanner::GenerateGCS() {
 
     AddCosts(element_list);
 
-    std::string filename = std::string("connectivity_graph");
-    drawPolygonsWithColors(polygons, lines, filename);
+    // std::string filename = std::string("connectivity_graph");
+    // drawPolygonsWithColors(polygons, lines, filename);
 }
 
-void GCSPlanner::AddCosts(const std::vector<std::pair<std::string, NodeInfo>>& element_list) {
+void GCSPlanner::AddCosts(const std::unordered_map<std::string, Element>& element_list) {
     auto vertices = this->main_region->Vertices();
 
     // avoid the source and target vertices that were added to the end. They will always be the final two spots in the list
@@ -277,17 +346,19 @@ void GCSPlanner::AddCosts(const std::vector<std::pair<std::string, NodeInfo>>& e
     // std::string target_vertex_name = "Region" + std::to_string(vertices.size()-1);
 
 
-    for (size_t i = 0; i < vertices.size(); i++)
+    for (auto element_pair : element_list)
     {
+        Element element = element_pair.second;
         // if (vertices[i]->name().find(source_vertex_name) != std::string::npos || vertices[i]->name().find(target_vertex_name) != std::string::npos) {
         //     // // this vertex is a start or target point that does not have an accurate mapping to the element because it has been artifically added
         //     continue;
         // }
+        int vertex_id = element.index;
 
-        auto vertex = vertices[i];
+        auto vertex = vertices[vertex_id];
         auto x = vertex->x();
-        auto element = element_list[i];
-        double scale = this->getTerrainParameter(element);
+        // auto element = element_list[];
+        double scale = this->getTerrainParameter(element.node);
 
         // 5 points (x,y,z) in the vertex
         // 16 values in the list -> the 16th value indicates how many points were selected in the vertex
@@ -323,26 +394,26 @@ void GCSPlanner::AddCosts(const std::vector<std::pair<std::string, NodeInfo>>& e
 }
 
 
-bool GCSPlanner::check_terrain(const std::pair<std::string, NodeInfo>& element, const Eigen::MatrixXd& vertices, const int& vehicle_type) {
-    std::string feature_name = element.second.nodeType->currentFeature.featureName;
+bool GCSPlanner::check_terrain(const std::pair<std::string, NodeInfo>& node, const Eigen::MatrixXd& vertices, const int& vehicle_type) {
+    std::string feature_name = node.second.nodeType->currentFeature.featureName;
     switch (vehicle_type)
     {
         case VehicleType::GroundVehicle:
-            if (element.second.nodeType->currentFeature.traversability.gv == 0.0 || element.second.nodeType->currentFeature.traversability.gv == 255.0) {
+            if (node.second.nodeType->currentFeature.traversability.gv == 0.0 || node.second.nodeType->currentFeature.traversability.gv == 255.0) {
                 return false;
             }
             vehicle_radius = 2.5; // m
             break;
 
         case VehicleType::AeralVehicle:
-            if (element.second.nodeType->currentFeature.traversability.av == 0.0) {
+            if (node.second.nodeType->currentFeature.traversability.av == 0.0) {
                 return false;
             }
             vehicle_radius = 1.0; // m
             break;
 
         case VehicleType::Pedestrian:
-            if (element.second.nodeType->currentFeature.traversability.pedestrian == 0.0) {
+            if (node.second.nodeType->currentFeature.traversability.pedestrian == 0.0) {
                 return false;
             }
             vehicle_radius = 0.4; // m
@@ -370,7 +441,7 @@ double GCSPlanner::getPathLength() {
     return pathLength;
 }
 
-double GCSPlanner::getTerrainParameter(const std::pair<std::string, NodeInfo>& element) {
+double GCSPlanner::getTerrainParameter(const NodeInfo& node) {
     // parameter scales
     const static double traversability_param = 1.0; // will be 0.6
     const static double occupiability_param = 0.3;
@@ -384,34 +455,34 @@ double GCSPlanner::getTerrainParameter(const std::pair<std::string, NodeInfo>& e
     switch (vehicle_type)
     {
         case VehicleType::GroundVehicle:
-            // if (element.second.nodeType->currentFeature.traversability.gv == 1) {
+            // if (node.second.nodeType->currentFeature.traversability.gv == 1) {
             //     traversability_cost = 5.0;
             // }
-            // else if (element.second.nodeType->currentFeature.traversability.gv == 2) {
+            // else if (node.second.nodeType->currentFeature.traversability.gv == 2) {
             //     traversability_cost = 2.0;
             // }
-            // else if (element.second.nodeType->currentFeature.traversability.gv == 3 || element.second.nodeType->currentFeature.traversability.gv == 250) {
+            // else if (node.second.nodeType->currentFeature.traversability.gv == 3 || node.second.nodeType->currentFeature.traversability.gv == 250) {
             //     traversability_cost = 1.0;
             // }
 
             // comment out for traditional costmap format. For json artificial cost, use the following line
-            traversability_cost = 100 - element.second.nodeType->currentFeature.traversability.gv; // from 0->100
-            occupiability = element.second.nodeType->currentFeature.occupiability.gv * 100;
-            if (element.second.nodeType->currentFeature.sensorVisibility.fromSide != "yes") 
-                visability = 10.0;
+            traversability_cost = 100 - node.nodeType->currentFeature.traversability.gv; // from 0->100
+            // occupiability = node.second.nodeType->currentFeature.occupiability.gv * 100;
+            // if (node.second.nodeType->currentFeature.sensorVisibility.fromSide != "yes") 
+            //     visability = 10.0;
             break;
 
         case VehicleType::AeralVehicle:
-            traversability_cost = 100 - element.second.nodeType->currentFeature.traversability.av; // from 0->100
-            occupiability = element.second.nodeType->currentFeature.occupiability.av * 100;
-            if (element.second.nodeType->currentFeature.sensorVisibility.fromAbove != "yes") 
+            traversability_cost = 100 - node.nodeType->currentFeature.traversability.av; // from 0->100
+            occupiability = node.nodeType->currentFeature.occupiability.av * 100;
+            if (node.nodeType->currentFeature.sensorVisibility.fromAbove != "yes") 
                 visability = 10.0;
             break;
 
         case VehicleType::Pedestrian:
-            traversability_cost = 100 - element.second.nodeType->currentFeature.traversability.pedestrian; // from 0->100
-            occupiability = element.second.nodeType->currentFeature.occupiability.pedestrian * 100;
-            if (element.second.nodeType->currentFeature.sensorVisibility.fromSide != "yes") 
+            traversability_cost = 100 - node.nodeType->currentFeature.traversability.pedestrian; // from 0->100
+            occupiability = node.nodeType->currentFeature.occupiability.pedestrian * 100;
+            if (node.nodeType->currentFeature.sensorVisibility.fromSide != "yes") 
                 visability = 10.0;
             break;
             

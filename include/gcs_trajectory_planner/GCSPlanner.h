@@ -21,7 +21,12 @@
 #include <visualization_msgs/msg/marker_array.hpp>
 #include "sa_msgs/srv/semantic_map_in_a_region_server.hpp"
 
+// point to local library instead of binary implementation from drake
+// #include "mcts_gcs_trajectory_optimization.h"
+// #include "mcts_graph_of_convex_sets.h"
 #include <drake/planning/trajectory_optimization/gcs_trajectory_optimization.h>
+
+
 #include <drake/planning/distance_and_interpolation_provider.h>
 #include <drake/geometry/optimization/graph_of_convex_sets.h>
 #include <drake/geometry/optimization/hpolyhedron.h>
@@ -57,17 +62,6 @@ enum VehicleType {
     Pedestrian     // 2
 };
 
-struct SWM_Feature {
-    drake::geometry::optimization::GraphOfConvexSets::Vertex* gcs_vertex;
-    drake::geometry::optimization::VPolytope vertex;
-    drake::planning::trajectory_optimization::GcsTrajectoryOptimization::Subgraph* region;
-    std::pair<std::string, NodeInfo> element;
-    std::string name;
-    int name_int;
-    boost::geometry::model::polygon<point_type> polygon;
-};
-
-
 
 class GCSPlanner
 {
@@ -79,7 +73,7 @@ private:
     double vehicle_radius;
 
     SemMap SM; // general Semantic World Model object
-    GcsTrajectoryOptimization gcs;
+    drake::planning::trajectory_optimization::GcsTrajectoryOptimization gcs;
     GcsTrajectoryOptimization::Subgraph* source_region; // starting location converted to graph coordinates
     GcsTrajectoryOptimization::Subgraph* target_region; // ending location converted to graph coordinates
     GcsTrajectoryOptimization::Subgraph* main_region;
@@ -99,12 +93,12 @@ private:
     void GenerateGCS();
 
     void GenerateIRISGraph();
-
-    void AddCosts(const std::vector<std::pair<std::string, NodeInfo>>& element);
+    
+    void AddCosts(const std::unordered_map<std::string, Element>& element_list);
 
     // checks if the terrain (element) is traversable by the vehicle_type
     // and if the feature is too small to be considered (improves computation speed)
-    bool check_terrain(const std::pair<std::string, NodeInfo>& element, const Eigen::MatrixXd& vertices, const int& vehicle_type);
+    bool check_terrain(const std::pair<std::string, NodeInfo>& node, const Eigen::MatrixXd& vertices, const int& vehicle_type);
 
     std::pair<ConvexSets, std::vector<std::pair<int, int>>> CreateMainRegionComponents(const std::vector<VPolytope>& vertex_list);
 
@@ -112,7 +106,7 @@ private:
 
     inline bool ArePolytopesTouching(const ::VPolytope& poly1, const VPolytope& poly2);
 
-    double getTerrainParameter(const std::pair<std::string, NodeInfo>& element);
+    double getTerrainParameter(const NodeInfo& node);
 
     // void mergePolygonPair(polygon& poly1, const polygon& poly2);
 

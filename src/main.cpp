@@ -1,6 +1,7 @@
 #include <../include/gcs_trajectory_planner/GCSPlanner.h>
+#include <../include/gcs_trajectory_planner/GCSPlanner.h>
 #include <../include/gcs_trajectory_planner/GenerateSWM.h>
-#include <../include/gcs_trajectory_planner/A*.h>
+#include <../include/gcs_trajectory_planner/Astar.h>
 #include <../include/gcs_trajectory_planner/MaverickPlanner.h>
 #include <chrono>
 #include <thread>
@@ -12,6 +13,8 @@
 class PlannerNode : public rclcpp::Node
 {
 private:
+    int vehicle_type;
+
     // path information
     std::vector<double> source_location;
     std::vector<double> goal_location;
@@ -20,6 +23,10 @@ private:
     SemMap SWM;
     nav_msgs::msg::OccupancyGrid occupancy_grid;
     nav2_msgs::msg::Costmap cost_map;
+
+    // map generator information
+    double height, width;
+    GenerateSWM swm_generator;
 
     // ROS2 specific information
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr publisher_; // publishes the polygons (features) to RVIZ
@@ -70,7 +77,7 @@ private:
 
     // void maverick_path_callback(const nav_msgs::msg::Path::SharedPtr msg);
 
-    std::vector<std::vector<double>> generateEndPoints();
+    std::tuple<std::vector<double>, std::vector<double>> generateEndPoints();
 
     nav_msgs::msg::Path runMaverick(std::vector<double> source_location, std::vector<double> target_location);
 
@@ -97,7 +104,7 @@ PlannerNode::PlannerNode(const rclcpp::NodeOptions & options)
 {
     RCLCPP_INFO(this->get_logger(), "Planner Node has started");
 
-    int vehicle_type = 0; // ground vehicle
+    vehicle_type = 0; // ground vehicle
 
     double length = 0.0;
 
@@ -132,7 +139,7 @@ PlannerNode::PlannerNode(const rclcpp::NodeOptions & options)
     double height = 600.0;
     size_t num_polygons = 100;
 
-    GenerateSWM swm_generator(width, height, num_polygons);
+    swm_generator.set_parameters(width, height, num_polygons);
 
     // convert cost map to occupancy grid msg
     occupancy_grid.header = cost_map.header;
@@ -145,35 +152,36 @@ PlannerNode::PlannerNode(const rclcpp::NodeOptions & options)
         occupancy_grid.data[i] = cost;
     }
 
-    auto {start_location, goal_location} = generateEndPoints();
+    std::tie(source_location, goal_location) = generateEndPoints();
 
-    nav_msgs::msg::Path maverick_path = runMaverick(start_location, goal_location);
-    getResults(maverick_path);
+    // nav_msgs::msg::Path maverick_path = runMaverick(source_location, goal_location);
+    // getResults(maverick_path);
 
-    nav_msgs::msg::Path a_star_path = runA_star(start_location, goal_location);
-    getResults(a_star_path);
+    // nav_msgs::msg::Path a_star_path = runA_star(source_location, goal_location);
+    // getResults(a_star_path);
 
-    nav_msgs::msg::Path gcs_path = runGCS(start_location, goal_location);
+    nav_msgs::msg::Path gcs_path = runGCS(source_location, goal_location);
+    std::cout << "finished GCS path" << std::endl;
     getResults(gcs_path);
 
-    nav_msgs::msg::Path mcts_gcs_path = runMCTS_GCS(start_location, goal_location);
-    getResults(mcts_gcs_path);
+    // nav_msgs::msg::Path mcts_gcs_path = runMCTS_GCS(source_location, goal_location);
+    // getResults(mcts_gcs_path);
 
     // may need a way to record averaged results
     // i.e. 10+ runs each and compare total scores relative to each other
 
     return;
 
-    for (int i = 0; i < num_of_tests; i++) {
-        if (i > 9) {
-            break;
-        }
+    // for (int i = 0; i < num_of_tests; i++) {
+    //     if (i > 9) {
+    //         break;
+    //     }
 
-        stat_results[i].resize(3); // three types of planners to record information about 
+    //     stat_results[i].resize(3); // three types of planners to record information about 
 
-        auto result = generateEndPoints();
-        std::vector<double> start_location = result[0];
-        std::vector<double> goal_location = result[0];
+    //     auto result = generateEndPoints();
+    //     std::vector<double> start_location = result[0];
+    //     std::vector<double> goal_location = result[0];
 
         // // generate map
         // SWM = swm_generator.getSWM();
@@ -220,246 +228,246 @@ PlannerNode::PlannerNode(const rclcpp::NodeOptions & options)
 
 
         // set up parameters
-        double path_cost;
-        double path_length;
-        double computation_time;
-        double path_sensitivity;
-        int collisions;
-        bool success;
+        // double path_cost;
+        // double path_length;
+        // double computation_time;
+        // double path_sensitivity;
+        // int collisions;
+        // bool success;
 
-        cv::Mat swm_image_with_path;
+//         cv::Mat swm_image_with_path;
 
-        // plan GCS planner
-        try {
-            auto start_time = this->get_clock()->now();
+//         // plan GCS planner
+//         try {
+//             auto start_time = this->get_clock()->now();
 
-            // plan GCS planner
-            source_location[0] = start_x;
-            source_location[1] = start_y;
-            target_location[0] = goal_x;
-            target_location[1] = goal_y;
-            auto planner = std::make_unique<TrajectoryPlanner>(SWM, vehicle_type, source_location, target_location);
+//             // plan GCS planner
+//             source_location[0] = start_x;
+//             source_location[1] = start_y;
+//             target_location[0] = goal_x;
+//             target_location[1] = goal_y;
+//             auto planner = std::make_unique<TrajectoryPlanner>(SWM, vehicle_type, source_location, target_location);
 
-            // get metrics
-            auto end_time = this->get_clock()->now();
-            auto gcs_time = end_time - start_time;
-            computation_time = gcs_time.seconds();
+//             // get metrics
+//             auto end_time = this->get_clock()->now();
+//             auto gcs_time = end_time - start_time;
+//             computation_time = gcs_time.seconds();
 
-            this->path = planner->getTrajectory();
+//             this->path = planner->getTrajectory();
 
-            length = planner->getPathLength();
-            double gcs_cost = ComputePathCost(cost_map, path);
-            double gcs_length = swm_generator.getPathLength(path);
-            std::cout << "gcs_length: " << gcs_length << std::endl;
-            if (std::isnan(gcs_length)) {
-                gcs_length = length;
-                std::cout << "gcs_length was nan now is: " << length << std::endl;
-            }
-            double gcs_sensitivity = swm_generator.getPathCurvature(path);
+//             length = planner->getPathLength();
+//             double gcs_cost = ComputePathCost(cost_map, path);
+//             double gcs_length = swm_generator.getPathLength(path);
+//             std::cout << "gcs_length: " << gcs_length << std::endl;
+//             if (std::isnan(gcs_length)) {
+//                 gcs_length = length;
+//                 std::cout << "gcs_length was nan now is: " << length << std::endl;
+//             }
+//             double gcs_sensitivity = swm_generator.getPathCurvature(path);
 
-            swm_image_with_path = swm_generator.getSWMImage(path);
+//             swm_image_with_path = swm_generator.getSWMImage(path);
 
-            PlanResults planresults;
-            stat_results[i][0] = planresults;
-            stat_results[i][0].path_cost = gcs_cost;
-            stat_results[i][0].path_length = gcs_length;
-            stat_results[i][0].path_sensitivity = gcs_sensitivity;
-            stat_results[i][0].computation_time = computation_time;
+//             PlanResults planresults;
+//             stat_results[i][0] = planresults;
+//             stat_results[i][0].path_cost = gcs_cost;
+//             stat_results[i][0].path_length = gcs_length;
+//             stat_results[i][0].path_sensitivity = gcs_sensitivity;
+//             stat_results[i][0].computation_time = computation_time;
 
-            if (gcs_cost == -1 || gcs_length == -1) {
-                i -= 1;
-                continue;
-            }
-        }
-        catch(const std::exception& e)
-        {
-            success = false;
-            std::cout << "Maverick plan " << i << " failed with error: "  << e.what() << std::endl;
-            i -= 1; // run 10 tests where the gcs planner is a success
-            continue;
-        }
+//             if (gcs_cost == -1 || gcs_length == -1) {
+//                 i -= 1;
+//                 continue;
+//             }
+//         }
+//         catch(const std::exception& e)
+//         {
+//             success = false;
+//             std::cout << "Maverick plan " << i << " failed with error: "  << e.what() << std::endl;
+//             i -= 1; // run 10 tests where the gcs planner is a success
+//             continue;
+//         }
 
-        // plan A* planner
+//         // plan A* planner
 
-        // load information for A* planner
-        PlanResults a_star_results;
-        occupancy_grid.header = cost_map.header;
-        occupancy_grid.info.width = cost_map.metadata.size_x;
-        occupancy_grid.info.height = cost_map.metadata.size_y;
-        occupancy_grid.info.resolution = cost_map.metadata.resolution;
-        occupancy_grid.data.resize(cost_map.metadata.size_x * cost_map.metadata.size_y);
-        for (size_t i = 0; i < cost_map.data.size(); ++i) {
-            int cost = cost_map.data[i];
-            occupancy_grid.data[i] = cost;
-        }
+//         // load information for A* planner
+//         PlanResults a_star_results;
+//         occupancy_grid.header = cost_map.header;
+//         occupancy_grid.info.width = cost_map.metadata.size_x;
+//         occupancy_grid.info.height = cost_map.metadata.size_y;
+//         occupancy_grid.info.resolution = cost_map.metadata.resolution;
+//         occupancy_grid.data.resize(cost_map.metadata.size_x * cost_map.metadata.size_y);
+//         for (size_t i = 0; i < cost_map.data.size(); ++i) {
+//             int cost = cost_map.data[i];
+//             occupancy_grid.data[i] = cost;
+//         }
 
-        auto start_time = this->get_clock()->now();
-        auto a_star_path = aStarPathfinder(occupancy_grid, start_x, start_y, goal_x, goal_y); // plan A* path
-        auto end_time = this->get_clock()->now();
-        auto a_star_time = end_time - start_time;
-        computation_time = a_star_time.seconds();
+//         auto start_time = this->get_clock()->now();
+//         auto a_star_path = aStarPathfinder(occupancy_grid, start_x, start_y, goal_x, goal_y); // plan A* path
+//         auto end_time = this->get_clock()->now();
+//         auto a_star_time = end_time - start_time;
+//         computation_time = a_star_time.seconds();
         
 
-        cv::Mat swm_image_with_Astar_path;
-        double astar_cost;
-        double astar_length;
-        double astar_sensitivity;
-        if (a_star_path.has_value()) {
-            for (auto pt : *a_star_path) {
-                std::cout << "(" << pt.pose.position.x << "," << pt.pose.position.y << "): " << unsigned(cost_map.data[round(pt.pose.position.x)*cost_map.metadata.size_y + round(pt.pose.position.y)]) << std::endl;
-            }
-            swm_image_with_Astar_path = swm_generator.addPathToImage(swm_image_with_path, *a_star_path, 2);
-            // astar_cost = swm_generator.compute_path_cost(*a_star_path);
-            astar_cost = ComputePathCost(cost_map, *a_star_path);
-            astar_length = swm_generator.getPathLength(*a_star_path);
-            astar_sensitivity = swm_generator.getPathCurvature(*a_star_path);
+//         cv::Mat swm_image_with_Astar_path;
+//         double astar_cost;
+//         double astar_length;
+//         double astar_sensitivity;
+//         if (a_star_path.has_value()) {
+//             for (auto pt : *a_star_path) {
+//                 std::cout << "(" << pt.pose.position.x << "," << pt.pose.position.y << "): " << unsigned(cost_map.data[round(pt.pose.position.x)*cost_map.metadata.size_y + round(pt.pose.position.y)]) << std::endl;
+//             }
+//             swm_image_with_Astar_path = swm_generator.addPathToImage(swm_image_with_path, *a_star_path, 2);
+//             // astar_cost = swm_generator.compute_path_cost(*a_star_path);
+//             astar_cost = ComputePathCost(cost_map, *a_star_path);
+//             astar_length = swm_generator.getPathLength(*a_star_path);
+//             astar_sensitivity = swm_generator.getPathCurvature(*a_star_path);
 
-            stat_results[i][1] = PlanResults();
-            stat_results[i][1].path_cost = astar_cost;
-            stat_results[i][1].path_length = astar_length;
-            stat_results[i][1].path_sensitivity = astar_sensitivity;
-            stat_results[i][1].computation_time = computation_time;
-        }
+//             stat_results[i][1] = PlanResults();
+//             stat_results[i][1].path_cost = astar_cost;
+//             stat_results[i][1].path_length = astar_length;
+//             stat_results[i][1].path_sensitivity = astar_sensitivity;
+//             stat_results[i][1].computation_time = computation_time;
+//         }
 
-        bool save_a_star_path = true;
-        if (save_a_star_path) {
-            std::string filename_ = "swm_image_with_A_star_path.png";
-            cv::imwrite(filename_, swm_image_with_Astar_path);
-        }
+//         bool save_a_star_path = true;
+//         if (save_a_star_path) {
+//             std::string filename_ = "swm_image_with_A_star_path.png";
+//             cv::imwrite(filename_, swm_image_with_Astar_path);
+//         }
 
-        // plan Maverick planner
-        PlanResults maverick_results;
-        geometry_msgs::msg::Pose start_location;
-        start_location.position.x = start_x;
-        start_location.position.y = start_y;
-        geometry_msgs::msg::Pose goal_location;
-        goal_location.position.x = goal_x;
-        goal_location.position.y = goal_y;
+//         // plan Maverick planner
+//         PlanResults maverick_results;
+//         geometry_msgs::msg::Pose start_location;
+//         start_location.position.x = start_x;
+//         start_location.position.y = start_y;
+//         geometry_msgs::msg::Pose goal_location;
+//         goal_location.position.x = goal_x;
+//         goal_location.position.y = goal_y;
 
-        // std::cout << "loading maverick planner" << std::endl;
-        // auto maverick_planner = MaverickPlanner();
-        // maverick_planner.set_map(occupancy_grid, SWM);
-        // maverick_planner.set_start_end(start_location, goal_location);
-        // start_time = this->get_clock()->now();
-        // auto maverick_path = maverick_planner.run_planner();
-        // end_time = this->get_clock()->now();
-        // auto maverick_time = end_time - start_time;
-        // computation_time = maverick_time.seconds();
+//         // std::cout << "loading maverick planner" << std::endl;
+//         // auto maverick_planner = MaverickPlanner();
+//         // maverick_planner.set_map(occupancy_grid, SWM);
+//         // maverick_planner.set_start_end(start_location, goal_location);
+//         // start_time = this->get_clock()->now();
+//         // auto maverick_path = maverick_planner.run_planner();
+//         // end_time = this->get_clock()->now();
+//         // auto maverick_time = end_time - start_time;
+//         // computation_time = maverick_time.seconds();
 
-        std::vector<geometry_msgs::msg::PoseStamped> maverick_path_vector;
+//         std::vector<geometry_msgs::msg::PoseStamped> maverick_path_vector;
 
-        // for (auto pt : maverick_path) {
-        //     geometry_msgs::msg::PoseStamped pose;
-        //     pose.pose.position.x = pt.x;
-        //     pose.pose.position.y = pt.y;
-        //     maverick_path_vector.push_back(pose);
-        // }
+//         // for (auto pt : maverick_path) {
+//         //     geometry_msgs::msg::PoseStamped pose;
+//         //     pose.pose.position.x = pt.x;
+//         //     pose.pose.position.y = pt.y;
+//         //     maverick_path_vector.push_back(pose);
+//         // }
 
-        cv::Mat swm_image_with_maverick_path;
-        double maverick_cost;
-        double maverick_length;
-        double maverick_sensitivity;
-        if (!maverick_path_vector.empty()) {
-            swm_image_with_maverick_path = swm_generator.addPathToImage(swm_image_with_Astar_path, maverick_path_vector, 1);
-            std::string filename_ = "swm_image_with_maverick_path.png";
-            cv::imwrite(filename_, swm_image_with_maverick_path);
+//         cv::Mat swm_image_with_maverick_path;
+//         double maverick_cost;
+//         double maverick_length;
+//         double maverick_sensitivity;
+//         if (!maverick_path_vector.empty()) {
+//             swm_image_with_maverick_path = swm_generator.addPathToImage(swm_image_with_Astar_path, maverick_path_vector, 1);
+//             std::string filename_ = "swm_image_with_maverick_path.png";
+//             cv::imwrite(filename_, swm_image_with_maverick_path);
 
-            // maverick_cost = swm_generator.compute_path_cost(maverick_path_vector);
-            maverick_cost = ComputePathCost(cost_map, maverick_path_vector);
-            maverick_length = swm_generator.getPathLength(maverick_path_vector);
-            maverick_sensitivity = swm_generator.getPathCurvature(maverick_path_vector);
+//             // maverick_cost = swm_generator.compute_path_cost(maverick_path_vector);
+//             maverick_cost = ComputePathCost(cost_map, maverick_path_vector);
+//             maverick_length = swm_generator.getPathLength(maverick_path_vector);
+//             maverick_sensitivity = swm_generator.getPathCurvature(maverick_path_vector);
 
-            // std::cout << "maverick cost: " << maverick_cost << std::endl;
-            // std::cout << "maverick length: " << maverick_length << std::endl;
-            // std::cout << "maverick sensitivity: " << maverick_sensitivity << std::endl;
+//             // std::cout << "maverick cost: " << maverick_cost << std::endl;
+//             // std::cout << "maverick length: " << maverick_length << std::endl;
+//             // std::cout << "maverick sensitivity: " << maverick_sensitivity << std::endl;
 
-            if (maverick_cost == -1 || maverick_length == -1) {
-                i -= 1;
-                continue;
-            }
+//             if (maverick_cost == -1 || maverick_length == -1) {
+//                 i -= 1;
+//                 continue;
+//             }
 
-            stat_results[i][2] = PlanResults();
-            stat_results[i][2].path_cost = maverick_cost;
-            stat_results[i][2].path_length = maverick_length;
-            stat_results[i][2].path_sensitivity = maverick_sensitivity;
-            stat_results[i][2].computation_time = computation_time;
-        }
+//             stat_results[i][2] = PlanResults();
+//             stat_results[i][2].path_cost = maverick_cost;
+//             stat_results[i][2].path_length = maverick_length;
+//             stat_results[i][2].path_sensitivity = maverick_sensitivity;
+//             stat_results[i][2].computation_time = computation_time;
+//         }
 
-        // record
-        std::cout << "Completed cycle: " << i << std::endl;
+//         // record
+//         std::cout << "Completed cycle: " << i << std::endl;
 
-    }
+//     }
 
-    double average_gcs_computation_time = 0.0;
-    double average_gcs_length = 0.0;
-    double average_gcs_cost = 0.0;
-    double average_gcs_sensitivity = 0.0;
+//     double average_gcs_computation_time = 0.0;
+//     double average_gcs_length = 0.0;
+//     double average_gcs_cost = 0.0;
+//     double average_gcs_sensitivity = 0.0;
 
-    double average_a_star_computation_time = 0.0;
-    double average_a_star_length = 0.0;
-    double average_a_star_cost = 0.0;
-    double average_a_star_sensitivity = 0.0;
+//     double average_a_star_computation_time = 0.0;
+//     double average_a_star_length = 0.0;
+//     double average_a_star_cost = 0.0;
+//     double average_a_star_sensitivity = 0.0;
 
-    double average_maverick_computation_time = 0.0;
-    double average_maverick_length = 0.0;
-    double average_maverick_cost = 0.0;
-    double average_maverick_sensitivity = 0.0;
+//     double average_maverick_computation_time = 0.0;
+//     double average_maverick_length = 0.0;
+//     double average_maverick_cost = 0.0;
+//     double average_maverick_sensitivity = 0.0;
 
-    std::cout << "length of stat results: " << stat_results.size() << std::endl;
+//     std::cout << "length of stat results: " << stat_results.size() << std::endl;
 
-    for (int i=0; i < stat_results.size()-1; i++) {
-        if (i > 9) {
-            break;
-        }
-        std::cout << "Start of next result segment" << std::endl;
+//     for (int i=0; i < stat_results.size()-1; i++) {
+//         if (i > 9) {
+//             break;
+//         }
+//         std::cout << "Start of next result segment" << std::endl;
 
-        // std::cout << stat_results[i][0].computation_time << std::endl;
-        // std::cout << stat_results[i][0].path_length << std::endl;
-        // std::cout << stat_results[i][0].path_cost << std::endl;
-        // std::cout << stat_results[i][0].path_sensitivity << std::endl;
-        average_gcs_computation_time += stat_results[i][0].computation_time;
-        average_gcs_length += stat_results[i][0].path_length;
-        average_gcs_cost += stat_results[i][0].path_cost;
-        average_gcs_sensitivity += stat_results[i][0].path_sensitivity;
+//         // std::cout << stat_results[i][0].computation_time << std::endl;
+//         // std::cout << stat_results[i][0].path_length << std::endl;
+//         // std::cout << stat_results[i][0].path_cost << std::endl;
+//         // std::cout << stat_results[i][0].path_sensitivity << std::endl;
+//         average_gcs_computation_time += stat_results[i][0].computation_time;
+//         average_gcs_length += stat_results[i][0].path_length;
+//         average_gcs_cost += stat_results[i][0].path_cost;
+//         average_gcs_sensitivity += stat_results[i][0].path_sensitivity;
 
-        // std::cout << stat_results[i][1].computation_time << std::endl;
-        // std::cout << stat_results[i][1].path_length << std::endl;
-        // std::cout << stat_results[i][1].path_cost << std::endl;
-        // std::cout << stat_results[i][1].path_sensitivity << std::endl;
-        average_a_star_computation_time += stat_results[i][1].computation_time;
-        average_a_star_length += stat_results[i][1].path_length;
-        average_a_star_cost += stat_results[i][1].path_cost;
-        average_a_star_sensitivity += stat_results[i][1].path_sensitivity;
+//         // std::cout << stat_results[i][1].computation_time << std::endl;
+//         // std::cout << stat_results[i][1].path_length << std::endl;
+//         // std::cout << stat_results[i][1].path_cost << std::endl;
+//         // std::cout << stat_results[i][1].path_sensitivity << std::endl;
+//         average_a_star_computation_time += stat_results[i][1].computation_time;
+//         average_a_star_length += stat_results[i][1].path_length;
+//         average_a_star_cost += stat_results[i][1].path_cost;
+//         average_a_star_sensitivity += stat_results[i][1].path_sensitivity;
 
-        // std::cout << stat_results[i][2].computation_time << std::endl;
-        // std::cout << stat_results[i][2].path_length << std::endl;
-        // std::cout << stat_results[i][2].path_cost << std::endl;
-        // std::cout << stat_results[i][2].path_sensitivity << std::endl;
-        average_maverick_computation_time += stat_results[i][2].computation_time;
-        average_maverick_length += stat_results[i][2].path_length;
-        average_maverick_cost += stat_results[i][2].path_cost;
-        average_maverick_sensitivity += stat_results[i][2].path_sensitivity;
-    }
+//         // std::cout << stat_results[i][2].computation_time << std::endl;
+//         // std::cout << stat_results[i][2].path_length << std::endl;
+//         // std::cout << stat_results[i][2].path_cost << std::endl;
+//         // std::cout << stat_results[i][2].path_sensitivity << std::endl;
+//         average_maverick_computation_time += stat_results[i][2].computation_time;
+//         average_maverick_length += stat_results[i][2].path_length;
+//         average_maverick_cost += stat_results[i][2].path_cost;
+//         average_maverick_sensitivity += stat_results[i][2].path_sensitivity;
+//     }
 
-    std::cout << "Average computation time:" << std::endl;
-    std::cout << "GCS: " << average_gcs_computation_time/num_of_tests << std::endl;
-    std::cout << "A Star: " << average_a_star_computation_time/num_of_tests << std::endl;
-    std::cout << "Maverick: " << average_maverick_computation_time/num_of_tests << std::endl;
-    std::cout << "Average path cost:" << std::endl;
-    std::cout << "GCS: " << average_gcs_cost/num_of_tests << std::endl;
-    std::cout << "A Star: " << average_a_star_cost/num_of_tests << std::endl;
-    std::cout << "Maverick: " << average_maverick_cost/num_of_tests << std::endl;
-    std::cout << "Average path length:" << std::endl;
-    std::cout << "GCS: " << average_gcs_length/num_of_tests << std::endl;
-    std::cout << "A Star: " << average_a_star_length/num_of_tests << std::endl;
-    std::cout << "Maverick: " << average_maverick_length/num_of_tests << std::endl;
-    std::cout << "Average path sensitivity:" << std::endl;
-    std::cout << "GCS: " << average_gcs_sensitivity/num_of_tests << std::endl;
-    std::cout << "A Star: " << average_a_star_sensitivity/num_of_tests << std::endl;
-    std::cout << "Maverick: " << average_maverick_sensitivity/num_of_tests << std::endl;
+//     std::cout << "Average computation time:" << std::endl;
+//     std::cout << "GCS: " << average_gcs_computation_time/num_of_tests << std::endl;
+//     std::cout << "A Star: " << average_a_star_computation_time/num_of_tests << std::endl;
+//     std::cout << "Maverick: " << average_maverick_computation_time/num_of_tests << std::endl;
+//     std::cout << "Average path cost:" << std::endl;
+//     std::cout << "GCS: " << average_gcs_cost/num_of_tests << std::endl;
+//     std::cout << "A Star: " << average_a_star_cost/num_of_tests << std::endl;
+//     std::cout << "Maverick: " << average_maverick_cost/num_of_tests << std::endl;
+//     std::cout << "Average path length:" << std::endl;
+//     std::cout << "GCS: " << average_gcs_length/num_of_tests << std::endl;
+//     std::cout << "A Star: " << average_a_star_length/num_of_tests << std::endl;
+//     std::cout << "Maverick: " << average_maverick_length/num_of_tests << std::endl;
+//     std::cout << "Average path sensitivity:" << std::endl;
+//     std::cout << "GCS: " << average_gcs_sensitivity/num_of_tests << std::endl;
+//     std::cout << "A Star: " << average_a_star_sensitivity/num_of_tests << std::endl;
+//     std::cout << "Maverick: " << average_maverick_sensitivity/num_of_tests << std::endl;
 }
 
-std::vector<std::vector<double>> PlannerNode::generateEndPoints() {
+std::tuple<std::vector<double>, std::vector<double>> PlannerNode::generateEndPoints() {
     // generate map
     SWM = swm_generator.getSWM();
     cv::Mat swm_image = swm_generator.getSWMImage();
@@ -503,40 +511,49 @@ std::vector<std::vector<double>> PlannerNode::generateEndPoints() {
         }
     }
 
-    return {{start_x, start_y}, {end_x, end_y}};
+    return std::make_tuple(std::vector<double>{start_x, start_y}, std::vector<double>{goal_x, goal_y});
 }
 
 nav_msgs::msg::Path PlannerNode::runMaverick(std::vector<double> start_location, std::vector<double> goal_location) {
     nav_msgs::msg::Path path;
 
+    geometry_msgs::msg::Pose start_pose;
+    start_pose.position.x = start_location[0];
+    start_pose.position.y = start_location[1];
+
+    geometry_msgs::msg::Pose goal_pose;
+    start_pose.position.x = start_location[0];
+    start_pose.position.y = start_location[1];
+
     // initialize
     auto maverick_planner = MaverickPlanner();
     maverick_planner.set_map(occupancy_grid, SWM);
-    maverick_planner.set_start_end(start_location, goal_location);
+    maverick_planner.set_start_end(start_pose, goal_pose);
 
-    start_time = this->get_clock()->now();
+    auto start_time = this->get_clock()->now();
 
     auto maverick_path = maverick_planner.run_planner();
     
-    end_time = this->get_clock()->now();
+    auto end_time = this->get_clock()->now();
     auto maverick_time = end_time - start_time;
-    computation_time = maverick_time.seconds();
+    auto computation_time = maverick_time.seconds();
 
     return maverick_path;
 }
 
 nav_msgs::msg::Path PlannerNode::runA_star(std::vector<double> start_location, std::vector<double> goal_location) {
-    nav_msgs::msg::Path path;
-
     auto start_time = this->get_clock()->now();
 
-    auto a_star_path = aStarPathfinder(occupancy_grid, start_x, start_y, goal_x, goal_y); // plan A* path
+    std::optional<nav_msgs::msg::Path> a_star_path = aStarPathfinder(occupancy_grid, start_location[0], start_location[1], goal_location[0], goal_location[1]); // plan A* path
 
     auto end_time = this->get_clock()->now();
     auto a_star_time = end_time - start_time;
-    computation_time = a_star_time.seconds();
+    auto computation_time = a_star_time.seconds();
 
-    return a_star_path;
+    if (a_star_path.has_value()) return a_star_path.value();
+
+    nav_msgs::msg::Path empty_path;
+    return empty_path;
 }
 
 nav_msgs::msg::Path PlannerNode::runGCS(std::vector<double> start_location, std::vector<double> goal_location) {
@@ -546,7 +563,7 @@ nav_msgs::msg::Path PlannerNode::runGCS(std::vector<double> start_location, std:
 
     auto end_time = this->get_clock()->now();
     auto gcs_time = end_time - start_time;
-    computation_time = gcs_time.seconds();
+    auto computation_time = gcs_time.seconds();
 
     return gcs_planner->getTrajectory();
 }
@@ -559,23 +576,33 @@ nav_msgs::msg::Path PlannerNode::runMCTS_GCS(std::vector<double> start_location,
 void PlannerNode::getResults(nav_msgs::msg::Path path) {
     std::vector<nav_msgs::msg::Path> paths;
     paths.push_back(path);
+    std::cout << "finished first" << std::endl;
     getResults(paths);
 }
 
 void PlannerNode::getResults(std::vector<nav_msgs::msg::Path> paths) {
     for (nav_msgs::msg::Path path : paths) {
+        std::cout << "middle of second" << std::endl;
         double path_cost = 0.0;
         double path_length = 0.0;
         double path_curviture = 0.0;
 
         path_cost = swm_generator.getPathCost(path);
+        std::cout << "finished cost" << std::endl;
         path_length = swm_generator.getPathLength(path);
+        std::cout << "finished length" << std::endl;
         path_curviture = swm_generator.getPathCurvature(path);
+        std::cout << "finished curvature" << std::endl;
     }
 }
 
 void PlannerNode::getResults(std::vector<std::vector<nav_msgs::msg::Path>> path) {
-    return std::vector<std::vector<nav_msgs::msg::Path>>;
+    // having completed path.size() test runs, compute the results and statisical analysis on the paths
+    std::cout << "starting third" << std::endl;
+    for (size_t i = 0; i < path.size(); i++)
+    {
+        getResults(path[i]);
+    }
 }
 
 // double PlannerNode::ComputePathCost(const nav2_msgs::msg::Costmap& costmap, const std::vector<geometry_msgs::msg::PoseStamped>& path) {

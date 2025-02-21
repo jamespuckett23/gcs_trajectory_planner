@@ -7,7 +7,7 @@
 #include <vector>
 #include <utility>
 
-std::optional<std::vector<geometry_msgs::msg::PoseStamped>> aStarPathfinder(
+std::optional<nav_msgs::msg::Path> aStarPathfinder(
     const nav_msgs::msg::OccupancyGrid& costmap, double start_x, double start_y, double goal_x, double goal_y);
-    
+
 #endif // A_STAR_PATHFINDER_HPP

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 set(CMAKE_CXX_STANDARD 17)
-project(gcs_trajectory_planner C CXX )
+project(mcts_gcs_planner C CXX )
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -46,17 +46,28 @@ find_package(drake REQUIRED)
 #  )
 
 include_directories( ${OpenCV_INCLUDE_DIRS} )
-link_libraries(${OpenCV_LIBS})
 
-add_executable(gcs_planner src/main.cpp src/Util/Common.cpp src/GCSPlanner.cpp src/Util/GenerateSWM.cpp src/Util/A*.cpp src/Util/MaverickPlanner.cpp)
-target_link_libraries(gcs_planner ${GMP_LIBRARIES})
+add_executable(gcs_planner 
+  src/Util/Common.cpp 
+  src/Util/GenerateSWM.cpp 
+  src/Util/Astar.cpp 
+  src/Util/MaverickPlanner.cpp
+  src/MCTS/MCTS.cpp
+  src/MCTS/MCTS_GCS.cpp
+  src/MCTS/JobScheduler.cpp
+  # src/GCS/mcts_gcs_trajectory_optimization.cpp
+  # src/GCS/mcts_graph_of_convex_sets.cpp
+  src/GCSPlanner.cpp 
+  # src/MCTS_GCSPlanner.cpp
+  src/main.cpp)
+
 ament_target_dependencies(gcs_planner rclcpp std_msgs sa_msgs std_srvs geometry_msgs visualization_msgs nav_msgs nav2_msgs OpenCV drake swri_transform_util) #  CGAL
 
 target_include_directories(gcs_planner
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>)
-
+    $<INSTALL_INTERFACE:include>
+)
 
 install(TARGETS 
   gcs_planner

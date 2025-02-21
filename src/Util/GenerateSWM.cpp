@@ -1,6 +1,9 @@
 #include "../../include/gcs_trajectory_planner/GenerateSWM.h"
 
-GenerateSWM(double width, double height, const int min_number_of_polygons) {
+GenerateSWM::GenerateSWM() {
+}
+
+void GenerateSWM::set_parameters(double width, double height, double min_number_of_polygons) {
     std::cout << "Generating SWM" << std::endl;
 
     // load constraints for new SWM
@@ -161,7 +164,7 @@ void GenerateSWM::create_swm() {
         std::vector<std::string> element_neighbor;
         for (auto second_element : swm.fm) {
             if (element.first != second_element.first && 
-                boost::geometry::touches(element.second.Polygon, second_element.second.Polygon)) {
+                boost::geometry::intersects(element.second.Polygon, second_element.second.Polygon)) {
                 element_neighbor.push_back(second_element.first);
             }
         }
@@ -504,7 +507,7 @@ nav2_msgs::msg::Costmap GenerateSWM::getCostMap() {
     return cost_map;
 }
 
-double GenerateSWM::getPathLength(std::vector<geometry_msgs::msg::PoseStamped>& path) {
+double GenerateSWM::getPathLength(nav_msgs::msg::Path path) {
     auto distance = [](geometry_msgs::msg::PoseStamped& start, geometry_msgs::msg::PoseStamped& end) {
         return std::sqrt(
             std::pow(end.pose.position.x - start.pose.position.x, 2) +
@@ -513,8 +516,9 @@ double GenerateSWM::getPathLength(std::vector<geometry_msgs::msg::PoseStamped>& 
     };
     double length = 0.0;
 
-    for (int i=0; i < path.size(); i++) {
-        length += distance(path[i], path[i+1]);
+    for (int i=0; i < path.poses.size(); i++) {
+        std::cout << i << "for loop" << std::endl;
+        length += distance(path.poses[i], path.poses[i+1]);
     }
 
     return length;
@@ -573,7 +577,7 @@ cv::Mat GenerateSWM::getCostMapImage() {
     return cost_map_image;
 }
 
-double GenerateSWM::getPathCurvature(const std::vector<geometry_msgs::msg::PoseStamped>& path) {
+double GenerateSWM::getPathCurvature(const nav_msgs::msg::Path& path) {
     auto calculateCurvature = [](const geometry_msgs::msg::PoseStamped& p1,
                                  const geometry_msgs::msg::PoseStamped& p2,
                                  const geometry_msgs::msg::PoseStamped& p3) -> double {
@@ -598,7 +602,7 @@ double GenerateSWM::getPathCurvature(const std::vector<geometry_msgs::msg::PoseS
         return curvature;
     };
 
-    if (path.size() < 3) {
+    if (path.poses.size() < 3) {
         std::cerr << "Path must contain at least 3 points to compute curvature." << std::endl;
         return 0.0;
     }
@@ -607,8 +611,8 @@ double GenerateSWM::getPathCurvature(const std::vector<geometry_msgs::msg::PoseS
     int curvature_count = 0;
 
     // Compute curvature for each triplet of points
-    for (size_t i = 1; i < path.size() - 1; ++i) {
-        double curvature = calculateCurvature(path[i - 1], path[i], path[i + 1]);
+    for (size_t i = 1; i < path.poses.size() - 1; ++i) {
+        double curvature = calculateCurvature(path.poses[i - 1], path.poses[i], path.poses[i + 1]);
         curvature_sum += curvature * curvature;
         curvature_count++;
     }
@@ -618,26 +622,26 @@ double GenerateSWM::getPathCurvature(const std::vector<geometry_msgs::msg::PoseS
     return rms_curvature;
 }
 
-double GenerateSWM::getPathCost(nav_msgs:msg::Path path) {
+double GenerateSWM::getPathCost(nav_msgs::msg::Path& path) {
     
-    auto get_row_major_index = [&costmap](int x_index, int y_index) -> int
+    auto get_row_major_index = [this](int x_index, int y_index) -> int
     {
-        int row_major_index = y_index*costmap.metadata.size_x + x_index;
+        int row_major_index = y_index*cost_map.metadata.size_x + x_index;
         return row_major_index;
     };
 
-    auto convert_to_costmap = [&costmap](geometry_msgs::msg::PoseStamped location) -> std::pair<int,int>
+    auto convert_to_cost_map = [this](geometry_msgs::msg::PoseStamped location) -> std::pair<int,int>
     {
-        int x = round((location.pose.position.x - costmap.metadata.origin.position.x) / costmap.metadata.resolution);
-        int y = round((location.pose.position.y - costmap.metadata.origin.position.y) / costmap.metadata.resolution);
+        int x = round((location.pose.position.x - cost_map.metadata.origin.position.x) / cost_map.metadata.resolution);
+        int y = round((location.pose.position.y - cost_map.metadata.origin.position.y) / cost_map.metadata.resolution);
         return std::make_pair(x, y);
     };
 
-    auto get_next_index = [&costmap, &convert_to_costmap](geometry_msgs::msg::PoseStamped next_location, int current_x, int current_y) -> std::pair<int,int>
+    auto get_next_index = [this, &convert_to_cost_map](geometry_msgs::msg::PoseStamped next_location, int current_x, int current_y) -> std::pair<int,int>
     {
         int next_x, next_y;
 
-        auto resulting_index = convert_to_costmap(next_location);
+        auto resulting_index = convert_to_cost_map(next_location);
         int location_x = resulting_index.first;
         int location_y = resulting_index.second;
 
@@ -672,13 +676,13 @@ double GenerateSWM::getPathCost(nav_msgs:msg::Path path) {
     //     { 1, -1}, { 1, 0}, { 1, 1}
     // };  
 
-    geometry_msgs::msg::PoseStamped start_pose = path[0];
-    int start_x_index = round((start_pose.pose.position.x - costmap.metadata.origin.position.x) / costmap.metadata.resolution);
-    int start_y_index = round((start_pose.pose.position.y - costmap.metadata.origin.position.y) / costmap.metadata.resolution);
+    geometry_msgs::msg::PoseStamped start_pose = path.poses[0];
+    int start_x_index = round((start_pose.pose.position.x - cost_map.metadata.origin.position.x) / cost_map.metadata.resolution);
+    int start_y_index = round((start_pose.pose.position.y - cost_map.metadata.origin.position.y) / cost_map.metadata.resolution);
 
-    geometry_msgs::msg::PoseStamped goal_pose = path.back();
-    int goal_x_index = round((goal_pose.pose.position.x - costmap.metadata.origin.position.x) / costmap.metadata.resolution);
-    int goal_y_index = round((goal_pose.pose.position.y - costmap.metadata.origin.position.y) / costmap.metadata.resolution);
+    geometry_msgs::msg::PoseStamped goal_pose = path.poses.back();
+    int goal_x_index = round((goal_pose.pose.position.x - cost_map.metadata.origin.position.x) / cost_map.metadata.resolution);
+    int goal_y_index = round((goal_pose.pose.position.y - cost_map.metadata.origin.position.y) / cost_map.metadata.resolution);
 
     // path.erase(path.begin());
     cost_map_path.push_back(std::make_pair(start_x_index, start_y_index));
@@ -700,7 +704,7 @@ double GenerateSWM::getPathCost(nav_msgs:msg::Path path) {
         }
 
         // find the next step
-        auto next_location = .poses[0];
+        auto next_location = path.poses[0];
         auto result_next_index = get_next_index(next_location, current_x_index, current_y_index);
         next_x = result_next_index.first;
         next_y = result_next_index.second;
@@ -709,13 +713,13 @@ double GenerateSWM::getPathCost(nav_msgs:msg::Path path) {
         cost_map_path.push_back(std::make_pair(next_x, next_y));
 
         // update
-        auto next_location_in_costmap = convert_to_costmap(next_location);
+        auto next_location_in_cost_map = convert_to_cost_map(next_location);
         current_x_index = next_x;
         current_y_index = next_y;
         if (current_x_index == goal_x_index && current_y_index == goal_y_index) {
                 at_goal_node = true;
         }
-        if (next_location_in_costmap.first == next_x && next_location_in_costmap.second == next_y) {
+        if (next_location_in_cost_map.first == next_x && next_location_in_cost_map.second == next_y) {
             path.poses.erase(path.poses.begin());
         }
 
@@ -730,7 +734,7 @@ double GenerateSWM::getPathCost(nav_msgs:msg::Path path) {
         double step_size = sqrt(pow(cost_map_path[i].first - cost_map_path[i-1].first,2) + pow(cost_map_path[i].second - cost_map_path[i-1].second,2));
 
         // path_cost += step_size/allowed_speed;
-        double traversability = costmap.data[index];
+        double traversability = cost_map.data[index];
         double traversability_cost = 100 - traversability;
 
         path_cost += step_size * traversability_cost;

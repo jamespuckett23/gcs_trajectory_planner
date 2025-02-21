@@ -27,9 +27,15 @@
 - Add generate instructions on how to use/install Drake with package
 - Files to update:
     - main.cpp
-    - GCSPlanner.cpp
+    - GCSPlanner.cpp -> this should be fine
         - Get to work with local Drake copy
-        - 
+        - In AddCosts - indexing by element.index rather than by cycling through two identical vectors. Check they reference the same polygons
     - Double-check Maverick and A* planners
     - GenerateSWM
         - Clean up/optimize
+        - Compare to getPathCost functions -> one is vector of geometry_msgs poses and the other is a nav_msgs path. Ideally should have the same total cost
+    - MCTS structure
+        - mcts GCS_state - tentatively done
+        - mcts_graph_of_convex_sets - started
+        - mcts_gcs_trajectory_optimization - started
+        - MCTS_GCSPlanner - not started

@@ -9,6 +9,7 @@
 #include <opencv2/opencv.hpp>
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
+#include "nav_msgs/msg/path.hpp"
 #include "nav2_msgs/msg/costmap.hpp"
 // #include "read_data.h"
 // #include "Planner.h"
@@ -68,7 +69,9 @@ private:
     void create_swm();
 
 public:
-    GenerateSWM(const std::vector<std::pair<double, double>> min_max_pair, const int min_number_of_polygons);
+    GenerateSWM();
+
+    void set_parameters(double width, double height, double min_number_of_polygons);
 
     std::vector<polygon> getPolygons();
 
@@ -86,11 +89,11 @@ public:
 
     double getPathCost(std::vector<geometry_msgs::msg::PoseStamped>& path);
 
-    double getPathLength(std::vector<geometry_msgs::msg::PoseStamped>& path);
+    double getPathLength(nav_msgs::msg::Path path);
 
-    double getPathCurvature(const std::vector<geometry_msgs::msg::PoseStamped>& path);
+    double getPathCurvature(const nav_msgs::msg::Path& path);
 
-    double getPathCost(nav_msgs::msg::Path path);
+    double getPathCost(nav_msgs::msg::Path& path);
 
     void regenerateSWM(const std::optional<std::vector<std::pair<double, double>>> min_max_pair = std::nullopt, 
                        const std::optional<int> min_number_of_polygons = std::nullopt);

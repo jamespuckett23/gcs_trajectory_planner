@@ -12,6 +12,9 @@
 
 #include <nav_msgs/msg/path.h>
 
+#include <drake/planning/trajectory_optimization/gcs_trajectory_optimization.h>
+#include <drake/geometry/optimization/vpolytope.h>
+
 // This is a trimed version of the Semantic Map developed by Anant. This is closer to a struct to hold mapping information rather than the indepth class that Anant wrote.
 
 typedef boost::geometry::model::point<double, 2, boost::geometry::cs::cartesian> point_type;
@@ -95,6 +98,17 @@ struct region_details {
 	cv::Mat occupancy_grid;
 	float resolution;
 	std::string layer;
+};
+
+struct Element {
+    // drake::geometry::optimization::GraphOfConvexSets::Vertex* gcs_vertex;
+    drake::geometry::optimization::VPolytope vertex;
+    // drake::planning::trajectory_optimization::GcsTrajectoryOptimization::Subgraph* region;
+    NodeInfo node;
+    // std::pair<std::string, NodeInfo> element;
+    std::string name;
+    int index;
+    boost::geometry::model::polygon<point_type> polygon;
 };
 
 class SemMap

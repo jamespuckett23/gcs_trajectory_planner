@@ -1,10 +1,13 @@
 #include <nav_msgs/msg/occupancy_grid.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <queue>
 #include <vector>
 #include <cmath>
 #include <unordered_map>
 #include <optional>
+
+#include "../../include/gcs_trajectory_planner/Astar.h"
 
 struct Node {
     int x, y;
@@ -25,8 +28,7 @@ float heuristic(int x, int y, int goal_x, int goal_y, float resolution) {
 }
 
 // A* pathfinding function
-std::optional<std::vector<geometry_msgs::msg::PoseStamped>> aStarPathfinder(
-    const nav_msgs::msg::OccupancyGrid& costmap, double start_x, double start_y, double goal_x, double goal_y) {
+std::optional<nav_msgs::msg::Path> aStarPathfinder(const nav_msgs::msg::OccupancyGrid& costmap, double start_x, double start_y, double goal_x, double goal_y) {
 
     int width = costmap.info.width;
     int height = costmap.info.height;
@@ -76,7 +78,10 @@ std::optional<std::vector<geometry_msgs::msg::PoseStamped>> aStarPathfinder(
             path.push_back(startPose);
 
             std::reverse(path.begin(), path.end());
-            return path;
+
+            nav_msgs::msg::Path nav_path;
+            nav_path.poses = path;
+            return nav_path;
         }
 
         for (const auto& [dx, dy] : directions) {

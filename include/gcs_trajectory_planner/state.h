@@ -29,7 +29,7 @@ public:
     virtual double rollout() const = 0;
     virtual bool is_terminal() const = 0;
     virtual void print() const {
-        cout << "Printing not implemented" << endl;
+        // std::cout << "Printing not implemented" << std::endl;
     }
     virtual bool player1_turn() const = 0;     // MCTS is for two-player games mostly -> (keeps win rate)
 };

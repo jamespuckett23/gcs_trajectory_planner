@@ -3,7 +3,7 @@
 #include <cmath>
 #include <ctime>
 #include <algorithm>
-#include "../include/mcts.h"
+#include "../../include/gcs_trajectory_planner/MCTS.h"
 
 #define DEBUG
 

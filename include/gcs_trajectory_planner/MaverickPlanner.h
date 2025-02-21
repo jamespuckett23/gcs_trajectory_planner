@@ -29,6 +29,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <boost/geometry.hpp>
 
 #include <../include/gcs_trajectory_planner/Common.h>

@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../include/JobScheduler.h"
+#include "../../include/gcs_trajectory_planner/JobScheduler.h"
 
 #define CHECK_PERROR(call, msg, actions) { if ( (call) < 0 ) { perror(msg); actions } }
 

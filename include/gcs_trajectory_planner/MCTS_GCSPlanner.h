@@ -1,40 +1,40 @@
-#ifndef MCTS_GCS_H
-#define MCTS_GCS_H
+// #ifndef MCTS_GCS_PLANNER_H
+// #define MCTS_GCS_PLANNER_H
 
-#include "state.h"
-#include "Common.h"
+// #include "state.h"
+// #include "Common.h"
+// #include "MCTS_GCS.h"
+// #include "mcts_gcs_trajectory_optimization.h"
+// #include "mcts_graph_of_convex_sets.h"
 
-
-class GCS_state : public MCTS_state {
-    // char board[3][3]{};
-    // bool player_won(char player) const;
-    // char calculate_winner() const;
-    // char turn, winner;
-    // void change_turn();
-
-    SemMamp swm;
-    drake::planner::GcsTrajectoryOptimization gcs;
-
-public:
-    GCS_state();
-    GCS_state(const GCS_state &other);
-    // char get_turn() const;
-    // char get_winner() const;
-    // bool is_terminal() const override;
-    MCTS_state *next_state(const MCTS_move *move) const override;
-    queue<MCTS_move *> *actions_to_try() const override;
-    double rollout() const override;                        // the rollout simulation in MCTS
-    void print() const override;
-    bool player1_turn() const override { return turn == 'x'; }
-};
+// #include "nav_msgs/msg/path.hpp"
+// #include "sa_msgs/srv/semantic_map_in_a_region_server.hpp"
 
 
-struct GCS_move : public MCTS_move {
-    int x, y;
-    char player;
-    GCS_move(int x, int y, char p) : x(x), y(y), player(p) {}
-    bool operator==(const MCTS_move& other) const override;
-};
+// class MCTS_GCS_Planner {
+//     public:
+//         MCTS_GCS_Planner();
 
+//         void setStart_Goal(std::vector<double> start, std::vector<double> goal);
 
-#endif // MCTS_GCS_H
+//         int setSWM(SemMap SWM);
+
+//         void runPlanner();
+
+//         nav_msgs::msg::Path getPath();
+
+//     private:
+//         std::vector<double> start_location;
+//         std::vector<double> goal_location;
+
+//         SemMap swm;
+//         drake::planning::trajectory_optimization::GcsTrajectoryOptimization gcs;
+
+//         nav_msgs::msg::Path path;
+
+//         void Generate_GCS();
+
+//         nav_msgs::msg::Path run_MCTS_GCS();
+// }
+
+// #endif // MCTS_GCS_PLANNER_H

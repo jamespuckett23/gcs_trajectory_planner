@@ -460,7 +460,7 @@ nav_msgs::msg::Path MaverickPlanner::refine_path_with_rrt() {
         std::cout << "waypoint[" << i << "]: " << waypoints[i] << std::endl;
     }
 
-    // std::cout << "waypoints.size(): " << waypoints.size() << std::endl;
+    std::cout << "waypoints.size(): " << waypoints.size() << std::endl;
     for (size_t i = 0; i < waypoints.size() - 1; ++i) {
         std::vector<cv::Point2f> refined_segment = rrt(waypoints[i], waypoints[i + 1]);
         refined_path.insert(refined_path.end(), refined_segment.begin(), refined_segment.end());
